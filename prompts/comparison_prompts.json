@@ -1,0 +1,18 @@
+[
+  {"id": "F01", "category": "factual", "prompt": "What is the capital of Australia?"},
+  {"id": "F02", "category": "factual", "prompt": "In what year did the Berlin Wall fall?"},
+  {"id": "F03", "category": "factual", "prompt": "What does HTTP stand for?"},
+  {"id": "F04", "category": "factual", "prompt": "What is the chemical symbol for gold?"},
+  {"id": "F05", "category": "factual", "prompt": "How many planets are in our solar system?"},
+  {"id": "R01", "category": "reasoning", "prompt": "If a train travels 60 mph for 2.5 hours, how far does it go? Show your work."},
+  {"id": "R02", "category": "reasoning", "prompt": "A bat and ball cost $1.10. The bat costs $1 more than the ball. How much does the ball cost?"},
+  {"id": "R03", "category": "reasoning", "prompt": "What comes next in this sequence: 2, 6, 18, 54, ___? Explain why."},
+  {"id": "C01", "category": "coding", "prompt": "Write a Python function to check if a number is prime."},
+  {"id": "C02", "category": "coding", "prompt": "Write a Python one-liner to flatten a list of lists."},
+  {"id": "S01", "category": "summarization", "prompt": "Summarize the concept of machine learning in exactly two sentences."},
+  {"id": "S02", "category": "summarization", "prompt": "Explain blockchain to a 10-year-old in three sentences."},
+  {"id": "CR01", "category": "creative", "prompt": "Write a two-sentence story about a robot discovering music."},
+  {"id": "CR02", "category": "creative", "prompt": "Give me three creative names for a coffee shop that specializes in AI-themed drinks."},
+  {"id": "I01", "category": "instruction", "prompt": "List exactly 4 programming languages, one per line, nothing else."},
+  {"id": "I02", "category": "instruction", "prompt": "Reply with only the number of words in this sentence: The quick brown fox jumps."}
+]
