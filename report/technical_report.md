@@ -134,8 +134,24 @@ Despite being slowest on this hardware, Mistral 7B produced the most factually a
 
 > **Status:** In progress. This section will be updated as benchmark runs complete.
 
-### 7.1 Automated benchmark — Phase 3
-*To be completed: 10 prompts × 3 models × 2 temperatures = 60 runs*
+### 7.1 Automated benchmark — Phase 3 results
+
+10 prompts × 3 models × 2 temperatures = 60 total runs
+
+| Model | Temp | Avg TTFT | Avg latency | Words/sec | Mem delta |
+|---|---|---|---|---|---|
+| Llama 3.2 3B | 0.0 | 7.46s | 119.40s | 1.4 | ~0 MB |
+| Llama 3.2 3B | 0.7 | 5.49s | 113.07s | 1.5 | ~0 MB |
+| Phi-4 Mini | 0.0 | 6.30s | 101.84s | 1.3 | ~0 MB |
+| Phi-4 Mini | 0.7 | 4.73s | 120.14s | 1.5 | ~0 MB |
+| Mistral 7B | 0.0 | 12.18s | 206.29s | 0.7 | ~0 MB |
+| Mistral 7B | 0.7 | 15.81s | 357.87s | 0.6 | ~0 MB |
+
+Key findings:
+- Mistral 7B at T=0.7 averaged 357s — unsuitable for interactive CPU deployment
+- Phi-4 Mini achieved best TTFT at 4.73s — most responsive for streaming use cases  
+- Temperature effect on latency is model-specific — Llama gets faster at T=0.7, Mistral gets 73% slower
+- Memory delta ≈ 0 across all runs — model resident in RAM, no per-inference allocation cost
 
 ### 7.2 Structured output validation — Phase 4
 *To be completed: Pydantic schema enforcement, retry success rates per model*
