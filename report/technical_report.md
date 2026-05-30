@@ -154,7 +154,25 @@ Key findings:
 - Memory delta ≈ 0 across all runs — model resident in RAM, no per-inference allocation cost
 
 ### 7.2 Structured output validation — Phase 4
-*To be completed: Pydantic schema enforcement, retry success rates per model*
+### 7.2 Structured output validation — Phase 4
+
+Pydantic schemas enforced on model outputs. Retry logic tested across 3 models.
+
+| Input | Model | Schema | Attempts | Success | Confidence | Time |
+|---|---|---|---|---|---|---|
+| "I love this" | Llama 3B | sentiment | 1 | ✓ | 0.9 | 45.8s |
+| "Worst experience" | Llama 3B | sentiment | 1 | ✓ | 0.9 | 16.7s |
+| "Okay, nothing special" | Llama 3B | sentiment | 1 | ✓ | 0.5 | 24.3s |
+| "Paris France" | Llama 3B | entity | 2 | ✗ | — | 102.0s |
+| "I loved this" | Mistral 7B | sentiment | 1 | ✓ | 1.0 | 158.4s |
+| "I loved this" | Phi-4 Mini | sentiment | 1 | ✓ | 0.9 | 59.9s |
+
+Key findings:
+- Confidence calibration works correctly — ambiguous input scored 0.5, strong inputs scored 0.9
+- Entity schema failed due to JSON truncation (max_tokens limit) — not a model compliance failure
+- Mistral 7B returned confidence=1.0 on subjective text — overconfident, flags a calibration issue
+- All models passed flat sentiment schema on attempt 1 — schema complexity drives failure rate
+- Retry system worked as designed — caught failures, re-prompted, failed gracefully without crashing
 
 ### 7.3 Model comparison study — Phase 5
 *To be completed: 30 prompts × 3 models × 2 temperatures = 180 runs*

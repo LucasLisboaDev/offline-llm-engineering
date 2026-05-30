@@ -3,9 +3,9 @@ Phase 4 — Structured JSON outputs with Pydantic validation + retry logic.
 Enforces a schema on model responses. Retries once on invalid JSON, then fails gracefully.
 
 Usage:
-  python structured.py "Analyze the sentiment of: I love this product!"
-  python structured.py "Extract info from: John Smith, 34, engineer at Acme Corp"
-  python structured.py --schema entity "Tell me about Paris, France"
+  python structured.py "I love this product"
+  python structured.py "Tell me about Paris France" --schema entity
+  python structured.py "I loved this" --model mistral:7b
 """
 import json
 import re
@@ -69,13 +69,14 @@ Do not include any text outside the JSON object.""",
     "entity": {
         "model": EntityResult,
         "system_prompt": """You are an entity extraction engine.
-You MUST respond with ONLY valid JSON matching this exact schema:
+You MUST respond with ONLY valid JSON. Use this exact schema:
 {
   "name": "<primary entity name>",
-  "type": "<person | place | organization | concept>",
-  "attributes": {"<key>": "<value>", ...},
-  "summary": "<one sentence description>"
+  "type": "person | place | organization | concept",
+  "attributes": {"key": "value"},
+  "summary": "<one sentence only>"
 }
+Rules: summary must be ONE sentence. attributes maximum 3 key-value pairs.
 Do not include any text outside the JSON object.""",
     },
 }
@@ -85,13 +86,13 @@ Do not include any text outside the JSON object.""",
 
 def extract_json(text: str) -> dict:
     """Pull JSON from model output — handles markdown fences and stray text."""
-    # Try direct parse first
+    # Strategy 1 — direct parse
     try:
         return json.loads(text.strip())
     except json.JSONDecodeError:
         pass
 
-    # Try extracting from ```json ... ``` fences
+    # Strategy 2 — strip markdown fences
     fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if fence_match:
         try:
@@ -99,7 +100,7 @@ def extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    # Try finding first { ... } block
+    # Strategy 3 — find first { ... } block
     brace_match = re.search(r"\{.*\}", text, re.DOTALL)
     if brace_match:
         try:
@@ -139,7 +140,7 @@ def run_structured(
             model=model,
             messages=messages,
             stream=False,
-            options={"temperature": temperature}
+            options={"temperature": temperature, "num_predict": 500}
         )
         elapsed = time.perf_counter() - start
         content = response["message"]["content"]
@@ -151,6 +152,7 @@ def run_structured(
     ]
 
     total_start = time.perf_counter()
+    content = ""
 
     # Attempt 1
     metrics["attempts"] = 1
@@ -169,8 +171,9 @@ def run_structured(
     retry_messages = messages + [
         {"role": "assistant", "content": content},
         {"role": "user", "content": (
-            "Your response was not valid JSON. "
-            "Please respond with ONLY a JSON object matching the schema. "
+            "Your response was not valid JSON or was truncated. "
+            "Reply with ONLY a short JSON object. "
+            "Keep summary to one sentence. Keep attributes to 2 pairs only. "
             "No explanation, no markdown, just the raw JSON object."
         )},
     ]
