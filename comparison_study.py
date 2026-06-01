@@ -75,7 +75,7 @@ def run_single(model: str, prompt_item: dict, temperature: float) -> dict:
             model=model,
             messages=[{"role": "user", "content": prompt_item["prompt"]}],
             stream=True,
-            options={"temperature": temperature, "seed": 42,num_predict": 300}
+            options={"temperature": temperature, "seed": 42,"num_predict": 300}
         ):
             token = chunk["message"]["content"]
             if first_token_time is None and token.strip():
