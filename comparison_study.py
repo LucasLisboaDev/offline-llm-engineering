@@ -4,8 +4,9 @@ Runs 30 standardized prompts across all three models at temp 0 and 0.7.
 Exports a full CSV + prints a summary report.
 
 Usage:
-  python comparison_study.py           # full study (takes 20-40 min)
+  python comparison_study.py           # full study (takes 2-4 hrs on CPU)
   python comparison_study.py --quick   # 5 prompts, quick validation
+  python comparison_study.py --model llama3.2:3b  # single model only
 """
 import time
 import json
@@ -21,6 +22,11 @@ from config import MODELS, TEMPERATURES, RESULTS_DIR
 
 app = typer.Typer(add_completion=False)
 console = Console()
+
+# Conciseness instruction appended to every prompt.
+# This is the primary fix for Phi-4's runaway generation —
+# a direct instruction overrides its training-template pattern matching.
+CONCISE_SUFFIX = " Be concise. Answer in 3 sentences or fewer unless the task requires more."
 
 # 30 standardized prompts across 6 categories (5 each)
 COMPARISON_PROMPTS = [
@@ -59,13 +65,21 @@ COMPARISON_PROMPTS = [
     {"id": "I02", "category": "instruction", "prompt": "Reply with only the number of words in this sentence: The quick brown fox jumps."},
     {"id": "I03", "category": "instruction", "prompt": "Translate 'Hello, how are you?' to Spanish. Reply with only the translation."},
     {"id": "I04", "category": "instruction", "prompt": "Write the alphabet backwards. Only the letters, no spaces or punctuation."},
-    {"id": "I05", "category": "instruction", "prompt": "Give me a word that rhymes with 'orange'. One word only."},
+    {"id": "I05", "category": "instruction", "prompt": "Give me a word that rhymes with orange. One word only."},
 ]
 
 QUICK_PROMPTS = COMPARISON_PROMPTS[:5]
 
 
 def run_single(model: str, prompt_item: dict, temperature: float) -> dict:
+    """Run one inference call and return detailed metrics."""
+
+    # Append conciseness instruction to every prompt.
+    # Primary defense against Phi-4's training-template runaway behavior.
+    # Instruction-following prompts already have built-in constraints so
+    # the suffix is harmless there too.
+    controlled_prompt = prompt_item["prompt"] + CONCISE_SUFFIX
+
     start = time.perf_counter()
     first_token_time = None
     response_text = ""
@@ -73,9 +87,13 @@ def run_single(model: str, prompt_item: dict, temperature: float) -> dict:
     try:
         for chunk in ollama.chat(
             model=model,
-            messages=[{"role": "user", "content": prompt_item["prompt"]}],
+            messages=[{"role": "user", "content": controlled_prompt}],
             stream=True,
-            options={"temperature": temperature, "seed": 42,"num_predict": 300}
+            options={
+                "temperature": temperature,
+                "seed": 42,
+                "num_predict": 250,   # hard token ceiling as secondary guard
+            }
         ):
             token = chunk["message"]["content"]
             if first_token_time is None and token.strip():
@@ -91,7 +109,7 @@ def run_single(model: str, prompt_item: dict, temperature: float) -> dict:
             "model": model,
             "model_display": MODELS[model]["display_name"],
             "temperature": temperature,
-            "prompt": prompt_item["prompt"],
+            "prompt": prompt_item["prompt"],          # store original, not controlled
             "response": response_text.strip(),
             "time_to_first_token_s": round(first_token_time or 0, 3),
             "total_latency_s": round(total_time, 3),
@@ -129,9 +147,12 @@ def run(
     total = len(models) * len(TEMPERATURES) * len(prompts)
 
     console.print(f"\n[bold]Model Comparison Study[/bold]")
-    console.print(f"[dim]{len(models)} models × {len(TEMPERATURES)} temps × {len(prompts)} prompts = {total} runs[/dim]")
+    console.print(f"[dim]{len(models)} models × {len(TEMPERATURES)} temps × "
+                  f"{len(prompts)} prompts = {total} runs[/dim]")
     if not quick:
-        console.print(f"[dim]Estimated time: {total * 15 // 60}–{total * 30 // 60} minutes on CPU[/dim]\n")
+        est_low = total * 60 // 60
+        est_high = total * 120 // 60
+        console.print(f"[dim]Estimated time: {est_low}–{est_high} minutes on CPU[/dim]\n")
 
     all_results = []
 
@@ -147,13 +168,14 @@ def run(
         for model in models:
             for temp in TEMPERATURES:
                 for p in prompts:
-                    desc = f"[cyan]{MODELS[model]['display_name']}[/cyan] T={temp} [{p['id']}]"
+                    desc = (f"[cyan]{MODELS[model]['display_name']}[/cyan] "
+                            f"T={temp} [{p['id']}]")
                     progress.update(main_task, description=desc)
                     result = run_single(model, p, temp)
                     all_results.append(result)
                     progress.advance(main_task)
 
-    # Save outputs
+    # ── Save outputs ──────────────────────────────────────────────────────────
     Path(RESULTS_DIR).mkdir(exist_ok=True)
     ts = int(time.time())
 
@@ -167,7 +189,7 @@ def run(
             writer.writeheader()
             writer.writerows(all_results)
 
-    # Summary table
+    # ── Summary table ─────────────────────────────────────────────────────────
     console.print("\n[bold]Performance Summary (averages across all prompts)[/bold]\n")
     table = Table(show_header=True, header_style="bold", box=None)
     table.add_column("Model", style="cyan")
@@ -183,7 +205,8 @@ def run(
             grouped[(r["model"], r["temperature"])].append(r)
 
     for (mdl, temp), runs in sorted(grouped.items()):
-        avg = lambda k: sum(r[k] for r in runs) / len(runs)
+        def avg(k):
+            return sum(r[k] for r in runs) / len(runs)
         table.add_row(
             MODELS[mdl]["display_name"],
             str(temp),
@@ -195,8 +218,8 @@ def run(
 
     console.print(table)
     console.print(f"\n[dim]Full results → {json_path}[/dim]")
-    console.print(f"[dim]CSV export  → {csv_path}[/dim]")
-    console.print("\n[dim]Tip: open the CSV in Excel or run: python analyze_results.py[/dim]")
+    console.print(f"[dim]CSV export   → {csv_path}[/dim]")
+    console.print("\n[dim]Next: python analyze_results.py[/dim]")
 
 
 if __name__ == "__main__":
